@@ -1,6 +1,4 @@
 /*
-
-
   This is the code for the Mega to communicate with the Nano,
   version 7.31 (month,day)
   by reagan s.
@@ -13,17 +11,18 @@
   should be able to just add the data from the digital pins in the
   same way.
 */
-
+#include <Sabertooth.h>
 #include <Wire.h>
 #include <ArduinoNunchuk.h>
 #define BAUDRATE 19200
+#define INT_POS = 127;
+#define INT_NEG = -127;
+
 ArduinoNunchuk nunchuk = ArduinoNunchuk();
-
 const int SIZE = 11;
-
 int myFrontArray[SIZE];
 int myAtariArray[SIZE];
-byte myWiiArray[SIZE];
+int myWiiArray[SIZE];
 
 String buildString();
 String yVal = "";
@@ -38,60 +37,143 @@ int motorControlA = 4;
 int motorControlB = 5;
 int motorControlSpeed = 10;     //PWM
 int seatLimitSwitch = 6;
-
-#include <Sabertooth.h>
+int driveD = 0;      // pos = forward, neg = back
+int turnD = 0;     // pos = right, neg = left
+float speedD = 1.0;    // 1.0 = FULL SPEED
 
 void setup() {
-
   //----------- Seat control --------------
-  pinMode(motorControlA, OUTPUT); // input a
-  pinMode(motorControlB, OUTPUT); // input b
+  pinMode(motorControlA, OUTPUT);                   // input a
+  pinMode(motorControlB, OUTPUT);                   // input b
   pinMode(upSwitchDirection, INPUT_PULLUP);
   pinMode(downSwitchDirection, INPUT_PULLUP);
   pinMode(seatLimitSwitch, INPUT_PULLUP);
-
-  Serial1.begin(19200);// The Max that the Nano can transmit
+  Serial1.begin(19200);                             // The Max that the Nano can transmit
   Serial.begin(BAUDRATE);
   nunchuk.init();
 }
 
 void loop() {
+  //  readFront();
+  readWii();
+  //  readAtari();
+  //  printFront();
+  printWii();
+  //  ST.drive(drive * speed);
+  //  ST.turn(turn * speed);
 
-  //SeatControl();
+}
 
-  //----------------------- Nunchuck -------------------------
-  //  nunchuk.update();
-  //-------------------- Front Controller -----------------------
-  //delay(500);
-  // read from port 1, send to port 0:
-  if (Serial1.available() > 0) {
-    if (Serial1.read() == ':') {  // looks for the beginning of the string
+
+void readFront() {
+  while (Serial1.available()) {
+    if (Serial1.read() == ':') {    // looks for the beginning of the string
       for (int i = 0; i < (SIZE); i++) {
         if (Serial1.peek() != ',') {
-          myFrontArray[i] = Serial1.parseInt();
+
+          if (i < 2) {
+            int tempInt = Serial1.parseInt();
+            tempInt = (tempInt > 524 || tempInt < 500) ? tempInt : 512;
+            myFrontArray[i] = map(tempInt, 0, 1024, -127, 127);
+          }
+          else if (i == 2) {
+            myFrontArray[i] = map(Serial1.parseInt(), 0, 1024, 0, 100);
+          } else if (i < 7) {
+            if (i % 2 == 1) {
+              myFrontArray[i] = map(Serial1.parseInt(), 0, 1, 0, -127);
+            } else {
+              myFrontArray[i] = map(Serial1.parseInt(), 0, 1, 0, 127);
+            }
+          } else {
+            myFrontArray[i] = Serial1.parseInt();
+          }
         }
-        Serial1.read();
+        Serial1.read();       // reads ','
       }
-      printFront();
-      printWii();
     }
-    Serial1.read();
+    Serial1.read();             // reads ':'
+  }
+}
+
+
+void readWii() {
+  // if the Wii controller gets unplugged then plugged back in.
+  if (myWiiArray[0] == 255 || myWiiArray[1] == 255) {
+    nunchuk.init();
   }
 
-  //delay(25);
+  nunchuk.update();
 
-  //  ST.drive(map(myArray[1], 0, 1023, -127, 127));
-  //  ST.turn(map(myArray[0], 0, 1023, -127, 127));
+  int midPoint = 128;
+  int range = 15;
+
+  signed int tempInt = nunchuk.analogX;
+  tempInt = (tempInt > (midPoint + range) || tempInt < (midPoint - range)) ? tempInt : midPoint;
+  myWiiArray[0] = map(tempInt, 26, 230, -127, 127); // Wii X
+
+  tempInt = nunchuk.analogY;
+  tempInt = (tempInt > (midPoint + range) || tempInt < (midPoint - range)) ? tempInt : midPoint;
+  myWiiArray[1] = map(tempInt, 26, 230, -127, 127); // Wii Y
+
+  //  myWiiArray[0] = nunchuk.analogX;
+  //  myWiiArray[1] = nunchuk.analogY;
+
+
+  //myWiiArray[2] = (nunchuk.accelX, DEC); // Wii X accl
+  //myWiiArray[3] = (nunchuk.accelY, DEC); // Wii Y accl
+  //myWiiArray[4] = (nunchuk.accelZ, DEC); // Wii z accl
+  myWiiArray[5] = (nunchuk.zButton); // Wii z button
+  myWiiArray[6] = (nunchuk.cButton); // Wii c button
+}
+
+void readAtari() {
+
+}
+
+void printFront() {
+  // Front Print
+  String myXString = (String(myFrontArray[0], DEC));
+  String myYString = (String(myFrontArray[1], DEC));
+  String myPString = (String(myFrontArray[2], DEC));
+  String myLString = (String(myFrontArray[3], DEC));
+  String myRString = (String(myFrontArray[4], DEC));
+  String myFString = (String(myFrontArray[5], DEC));
+  String myBString = (String(myFrontArray[6], DEC));
+  String myBRString = (String(myFrontArray[7], DEC));
+  String myQSString = (String(myFrontArray[8], DEC));
+  String mySUString = (String(myFrontArray[9], DEC));
+  String mySDString = (String(myFrontArray[10], DEC));
+  //Serial.println("Front Control");
+  Serial.println
+  ("X:" + myXString + ", Y:" + myYString + ", V:" + myPString + ", L:" +
+   myLString + ", R:" + myRString + ", B:" + myFString + ", F:" +
+   myBString + ", BR:" + myBRString + ", QS:" + myQSString + ", SU:" +
+   mySUString + ", SD:" + mySDString);
+}
+
+void printWii() {
+  // Wii Print
+  Serial.print(myWiiArray[0], DEC);
+  Serial.print(' ');
+  Serial.print(myWiiArray[1], DEC);
+  Serial.print(' ');
+  Serial.print(myWiiArray[5], DEC);
+  Serial.print(' ');
+  Serial.print(myWiiArray[6], DEC);
+  Serial.print(' ');
+  Serial.println();
 }
 
 void SeatControl(void) {
-  analogWrite(motorControlSpeed, analogRead(speedControl));
-  if (digitalRead(upSwitchDirection) == 0) {
+  // Reads pot and writes value to motorControlSpeed pin
+  analogWrite(motorControlSpeed, myFrontArray[2]);
+
+  if (myFrontArray[9] == 0) {
     digitalWrite(motorControlA, HIGH);
     digitalWrite(motorControlB, LOW);
     delay(1);
   }
-  else if (digitalRead(downSwitchDirection) == 0) {
+  else if (myFrontArray[10] == 0) {
     digitalWrite(motorControlA, LOW);
     digitalWrite(motorControlB, HIGH);
     delay(1);
@@ -106,52 +188,4 @@ void SeatControl(void) {
     delay(1);
   }
 }
-void printFront() {
-  String myXString = (String(myFrontArray[0], DEC));
-  String myYString = (String(myFrontArray[1], DEC));
-  String myPString = (String(myFrontArray[2], DEC));
-  String myLString = (String(myFrontArray[3], DEC));
-  String myRString = (String(myFrontArray[4], DEC));
-  String myFString = (String(myFrontArray[5], DEC));
-  String myBString = (String(myFrontArray[6], DEC));
-  String myBRString = (String(myFrontArray[7], DEC));
-  String myQSString = (String(myFrontArray[8], DEC));
-  String mySUString = (String(myFrontArray[9], DEC));
-  String mySDString = (String(myFrontArray[10], DEC));
-  //Serial.println("Front Control");
-  Serial.println
-  (myXString + ", " + myYString + ", " + myPString + ", " +
-   myLString + ", " + myRString + ", " + myFString + ", " +
-   myBString + ", " + myBRString + ", " + myQSString + ", " +
-   mySUString + ", " + mySDString);
-}
-void printWii() {
 
-  // if the Wii controller gets unplugged then plugged back in.
-  if (myWiiArray[0] == 255 || myWiiArray[1] == 255) {
-    nunchuk.init();
-  }
-
-  nunchuk.update();
-
-  myWiiArray[0] = (nunchuk.analogX); // Wii X
-  myWiiArray[1] = (nunchuk.analogY); // Wii Y
-  //myWiiArray[2] = (nunchuk.accelX, DEC); // Wii X accl
-  //myWiiArray[3] = (nunchuk.accelY, DEC); // Wii Y accl
-  //myWiiArray[4] = (nunchuk.accelZ, DEC); // Wii z accl
-  myWiiArray[5] = (nunchuk.zButton); // Wii z button
-  myWiiArray[6] = (nunchuk.cButton); // Wii c button
-
-
-  Serial.print(myWiiArray[0], DEC);
-  Serial.print(' ');
-  Serial.print(myWiiArray[1], DEC);
-  Serial.print(' ');
-  Serial.print(myWiiArray[5], DEC);
-  Serial.print(' ');
-  Serial.print(myWiiArray[6], DEC);
-  Serial.print(' ');
-
-
-
-}
